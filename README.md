@@ -21,7 +21,8 @@ Recherchez des vêtements par texte ou par image grâce à la recherche hybride 
 | Vector DB | Weaviate 1.28 |
 | Backend | FastAPI + Uvicorn |
 | Dataset | [ASOS e-commerce](https://huggingface.co/datasets/UniqueData/asos-e-commerce-dataset) |
-| Runtime | Python 3.11, Docker Compose |
+| Infra | GCP (VM + GPU NVIDIA), Docker Compose |
+| Runtime | Python 3.11 |
 
 ## Démarrage rapide
 
@@ -29,6 +30,7 @@ Recherchez des vêtements par texte ou par image grâce à la recherche hybride 
 
 - Docker & Docker Compose
 - ~4 Go de RAM pour Weaviate
+- GPU NVIDIA + [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) (pour le mode GPU)
 
 ### 1. Configuration
 
@@ -36,25 +38,33 @@ Recherchez des vêtements par texte ou par image grâce à la recherche hybride 
 cp .env.example .env
 ```
 
-### 2. Lancer Weaviate + l'application
+### 2. Mode CPU (local / VM sans GPU)
 
 ```bash
+# Lancer Weaviate + app
 docker compose up -d
-```
 
-L'application est disponible sur [http://localhost:8000](http://localhost:8000).
-
-### 3. Indexer le dataset ASOS
-
-```bash
+# Indexer (500 produits par défaut)
 docker compose run --rm indexer
 ```
 
-Par défaut, 500 produits sont indexés. Pour en indexer plus :
+### 3. Mode GPU (GCP avec NVIDIA)
 
 ```bash
-docker compose run --rm indexer sh -c "python scripts/index_asos.py --max-items 2000 --max-images-per-product 3"
+# Lancer Weaviate + app GPU
+docker compose --profile gpu up -d
+
+# Indexer avec GPU (2000 produits par défaut)
+docker compose --profile setup-gpu run --rm indexer-gpu
 ```
+
+Pour ajuster le nombre de produits :
+
+```bash
+docker compose --profile setup-gpu run --rm indexer-gpu sh -c "python scripts/index_asos.py --max-items 5000 --max-images-per-product 3"
+```
+
+L'application est disponible sur [http://localhost:8000](http://localhost:8000).
 
 ## Développement local (sans Docker)
 
@@ -106,7 +116,8 @@ uvicorn src.web.app:app --reload --port 8000
 │   └── index_asos.py         # Pipeline d'ingestion ASOS
 ├── tests/
 ├── docker-compose.yml
-├── Dockerfile
+├── Dockerfile              # Image CPU
+├── Dockerfile.gpu          # Image GPU (CUDA 12.1)
 └── pyproject.toml
 ```
 

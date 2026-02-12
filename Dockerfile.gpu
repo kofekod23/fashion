@@ -1,0 +1,50 @@
+# GPU-enabled Dockerfile for CUDA support on GCP
+FROM nvidia/cuda:12.1-cudnn8-runtime-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    DEVICE=cuda
+
+WORKDIR /app
+
+# Install Python and system dependencies
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-venv \
+    python3-pip \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python \
+    && ln -sf /usr/bin/pip3 /usr/bin/pip
+
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip
+
+# Install PyTorch with CUDA support first
+RUN pip install --no-cache-dir \
+    torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Copy project files
+COPY pyproject.toml .
+COPY README.md .
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+
+# Install remaining dependencies
+RUN pip install --no-cache-dir -e .
+
+# Create data directory
+RUN mkdir -p /app/data
+
+# Expose port for web server
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command: run the web server
+CMD ["uvicorn", "src.web.app:app", "--host", "0.0.0.0", "--port", "8000"]

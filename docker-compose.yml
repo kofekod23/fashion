@@ -1,8 +1,11 @@
 # Docker Compose for Fashion Search Engine
-# Includes Weaviate vector database
+# Includes Weaviate, supports both CPU and GPU modes
+# Deploy on GCP: docker compose --profile gpu up -d (for GPU) or docker compose up -d (for CPU)
 
 services:
-  # Weaviate Vector Database
+  # ============================================
+  # Weaviate Vector Database (Self-hosted)
+  # ============================================
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:1.28.2
     ports:
@@ -15,6 +18,7 @@ services:
       DEFAULT_VECTORIZER_MODULE: 'none'
       CLUSTER_HOSTNAME: 'node1'
       ENABLE_API_BASED_MODULES: 'true'
+      # Performance tuning for GCP
       LIMIT_RESOURCES: 'false'
       GOMAXPROCS: '4'
     volumes:
@@ -26,12 +30,17 @@ services:
       timeout: 10s
       retries: 5
       start_period: 10s
+    # Resource limits (adjust based on your GCP VM)
     deploy:
       resources:
         limits:
           memory: 4G
         reservations:
           memory: 2G
+
+  # ============================================
+  # CPU Mode (Default)
+  # ============================================
 
   # Web Application (CPU)
   app:
@@ -54,7 +63,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # Index ASOS dataset
+  # Index ASOS dataset (CPU)
   indexer:
     build:
       context: .
@@ -73,12 +82,82 @@ services:
         condition: service_healthy
     command: >
       sh -c "
-        echo 'Indexing ASOS dataset...'
+        echo 'Indexing ASOS dataset (CPU mode)...'
         python scripts/index_asos.py --max-items 500
         echo 'Indexing complete!'
       "
     profiles:
       - setup
+
+  # ============================================
+  # GPU Mode (for GCP with NVIDIA GPU)
+  # ============================================
+
+  # Web Application (GPU)
+  app-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "8000:8000"
+    environment:
+      - WEAVIATE_URL=http://weaviate:8080
+      - WEAVIATE_API_KEY=
+      - DEVICE=cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - model-cache:/root/.cache
+    depends_on:
+      weaviate:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    profiles:
+      - gpu
+
+  # Index ASOS dataset (GPU)
+  indexer-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    environment:
+      - WEAVIATE_URL=http://weaviate:8080
+      - WEAVIATE_API_KEY=
+      - DEVICE=cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - model-cache:/root/.cache
+    depends_on:
+      weaviate:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      sh -c "
+        echo 'Indexing ASOS dataset (GPU mode)...'
+        python scripts/index_asos.py --max-items 2000
+        echo 'Indexing complete!'
+      "
+    profiles:
+      - gpu
+      - setup-gpu
 
 volumes:
   weaviate-data:
