@@ -21,50 +21,56 @@ Recherchez des vêtements par texte ou par image grâce à la recherche hybride 
 | Vector DB | Weaviate 1.28 |
 | Backend | FastAPI + Uvicorn |
 | Dataset | [ASOS e-commerce](https://huggingface.co/datasets/UniqueData/asos-e-commerce-dataset) |
-| Infra | GCP (VM + GPU NVIDIA), Docker Compose |
-| Runtime | Python 3.11 |
+| Infra | GCP (VM CPU) + Google Colab (GPU) |
+| Runtime | Python 3.11, Docker Compose |
+
+## Architecture
+
+```
+┌─────────────────────┐         ┌──────────────────────┐
+│   Google Colab (GPU) │         │      GCP VM (CPU)     │
+│                     │         │                      │
+│  Fashion CLIP       │ vectors │  Weaviate :8080      │
+│  encode images  ────┼────────►│  (vector DB)         │
+│  (batch GPU)        │         │                      │
+│                     │         │  FastAPI app :8000    │
+└─────────────────────┘         │  (search + inference) │
+                                └──────────────────────┘
+```
+
+- **Colab** : indexation lourde (encodage de milliers d'images) avec GPU gratuit
+- **GCP** : Weaviate + app FastAPI en CPU (l'inférence = 1 encoding par requête, rapide sur CPU)
 
 ## Démarrage rapide
 
-### Prérequis
-
-- Docker & Docker Compose
-- ~4 Go de RAM pour Weaviate
-- GPU NVIDIA + [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) (pour le mode GPU)
-
-### 1. Configuration
+### 1. GCP — Lancer Weaviate + app
 
 ```bash
 cp .env.example .env
+docker compose up -d
 ```
 
-### 2. Mode CPU (local / VM sans GPU)
+L'application est disponible sur `http://<IP_GCP>:8000`.
+
+Ports à ouvrir dans le firewall GCP : **8000** (app), **8080** (Weaviate HTTP), **50051** (Weaviate gRPC).
+
+### 2. Colab — Indexer le dataset avec GPU
+
+Ouvrir [`notebooks/index_asos_colab.ipynb`](notebooks/index_asos_colab.ipynb) dans Google Colab :
+
+1. Activer le runtime GPU (Runtime → Change runtime type → T4)
+2. Renseigner `GCP_EXTERNAL_IP` = IP externe de ta VM
+3. Exécuter toutes les cellules
+
+Le notebook encode les images sur GPU Colab et pousse les vecteurs directement dans Weaviate sur GCP.
+
+### 3. Alternative — Indexer en CPU sur la VM
+
+Pour un petit volume sans Colab :
 
 ```bash
-# Lancer Weaviate + app
-docker compose up -d
-
-# Indexer (500 produits par défaut)
 docker compose run --rm indexer
 ```
-
-### 3. Mode GPU (GCP avec NVIDIA)
-
-```bash
-# Lancer Weaviate + app GPU
-docker compose --profile gpu up -d
-
-# Indexer avec GPU (2000 produits par défaut)
-docker compose --profile setup-gpu run --rm indexer-gpu
-```
-
-Pour ajuster le nombre de produits :
-
-```bash
-docker compose --profile setup-gpu run --rm indexer-gpu sh -c "python scripts/index_asos.py --max-items 5000 --max-images-per-product 3"
-```
-
-L'application est disponible sur [http://localhost:8000](http://localhost:8000).
 
 ## Développement local (sans Docker)
 
@@ -113,11 +119,12 @@ uvicorn src.web.app:app --reload --port 8000
 │       └── templates/
 │           └── index.html     # Interface frontend
 ├── scripts/
-│   └── index_asos.py         # Pipeline d'ingestion ASOS
+│   └── index_asos.py          # Pipeline d'ingestion ASOS
+├── notebooks/
+│   └── index_asos_colab.ipynb # Indexation GPU via Google Colab
 ├── tests/
 ├── docker-compose.yml
-├── Dockerfile              # Image CPU
-├── Dockerfile.gpu          # Image GPU (CUDA 12.1)
+├── Dockerfile
 └── pyproject.toml
 ```
 
