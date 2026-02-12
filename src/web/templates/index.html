@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Fashion Search</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #8e44ad;
+            --accent: #e74c3c;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #333;
+            --text-light: #7f8c8d;
+            --border: #e0e0e0;
+            --chat-user: #8e44ad;
+            --chat-bot: #f0f0f0;
+            --success: #27ae60;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* ===== HEADER ===== */
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-logo {
+            width: 36px;
+            height: 36px;
+        }
+
+        header h1 {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        .admin-btn {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .admin-btn:hover { background: rgba(255,255,255,0.25); }
+
+        /* ===== MAIN LAYOUT ===== */
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* ===== CHATBOT SECTION ===== */
+        .chat-section {
+            max-width: 700px;
+            margin: 0 auto 30px;
+        }
+
+        .chat-box {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, var(--secondary), #9b59b6);
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chat-header-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-header h2 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .chat-messages {
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .chat-msg {
+            display: flex;
+            gap: 8px;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .chat-msg.bot { align-self: flex-start; }
+        .chat-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+
+        .chat-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .chat-msg.bot .chat-avatar { background: var(--secondary); color: white; }
+        .chat-msg.user .chat-avatar { background: var(--primary); color: white; }
+
+        .chat-bubble {
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+
+        .chat-msg.bot .chat-bubble {
+            background: var(--chat-bot);
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-msg.user .chat-bubble {
+            background: var(--chat-user);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* Chat option buttons */
+        .chat-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .chat-option-btn {
+            padding: 8px 18px;
+            border: 2px solid var(--secondary);
+            background: white;
+            color: var(--secondary);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.88rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .chat-option-btn:hover {
+            background: var(--secondary);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .chat-option-btn.selected {
+            background: var(--secondary);
+            color: white;
+        }
+
+        /* Chat text input */
+        .chat-input-area {
+            padding: 15px 20px;
+            border-top: 1px solid var(--border);
+            display: none;
+        }
+
+        .chat-input-area.active { display: flex; gap: 10px; }
+
+        .chat-input-area input {
+            flex: 1;
+            padding: 10px 16px;
+            border: 2px solid var(--border);
+            border-radius: 24px;
+            font-size: 0.92rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input-area input:focus { border-color: var(--secondary); }
+
+        .chat-send-btn {
+            padding: 10px 20px;
+            background: var(--secondary);
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .chat-send-btn:hover { background: #7d3c98; transform: translateY(-1px); }
+
+        /* Image search button in chat */
+        .chat-image-btn {
+            padding: 8px 18px;
+            border: 2px dashed var(--border);
+            background: white;
+            color: var(--text-light);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.88rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .chat-image-btn:hover {
+            border-color: var(--secondary);
+            color: var(--secondary);
+        }
+
+        /* Typing indicator */
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+        }
+
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #bbb;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+            30% { transform: translateY(-6px); opacity: 1; }
+        }
+
+        /* New search button */
+        .new-search-area {
+            padding: 12px 20px;
+            border-top: 1px solid var(--border);
+            display: none;
+            text-align: center;
+        }
+
+        .new-search-area.active { display: block; }
+
+        .new-search-btn {
+            padding: 10px 24px;
+            background: linear-gradient(135deg, var(--secondary), #9b59b6);
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .new-search-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(142,68,173,0.3); }
+
+        /* ===== RESULTS SECTION ===== */
+        .results-section {
+            display: none;
+        }
+
+        .results-section.active { display: block; }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .results-header h2 {
+            font-size: 1.2rem;
+            color: var(--primary);
+        }
+
+        .results-count {
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .product-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
+
+        .product-card-img {
+            width: 100%;
+            aspect-ratio: 3/4;
+            object-fit: cover;
+            background: #f0f0f0;
+        }
+
+        .product-card-info {
+            padding: 12px;
+        }
+
+        .product-card-name {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+
+        .product-card-brand {
+            font-size: 0.78rem;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+
+        .product-card-price {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .product-card-score {
+            font-size: 0.72rem;
+            color: var(--text-light);
+            margin-top: 4px;
+        }
+
+        /* ===== FEATURED SECTION ===== */
+        .featured-section {
+            margin-bottom: 30px;
+        }
+
+        .featured-section h2 {
+            font-size: 1.2rem;
+            color: var(--primary);
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .featured-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        /* ===== PRODUCT DETAIL MODAL ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 30px;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-light);
+            padding: 4px;
+        }
+
+        .modal-close:hover { color: var(--text); }
+
+        .modal-images {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+        }
+
+        .modal-img {
+            width: 200px;
+            height: 260px;
+            object-fit: cover;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+
+        .modal-info h3 {
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+
+        .modal-info .modal-brand {
+            color: var(--text-light);
+            margin-bottom: 8px;
+        }
+
+        .modal-info .modal-price {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 12px;
+        }
+
+        .modal-info .modal-desc {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .modal-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .modal-tag {
+            padding: 4px 12px;
+            background: #f0f0f0;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            color: var(--text-light);
+        }
+
+        .modal-link {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 24px;
+            background: var(--secondary);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .modal-link:hover { background: #7d3c98; }
+
+        /* ===== ADMIN MODAL ===== */
+        .admin-modal .modal-content {
+            max-width: 700px;
+        }
+
+        .admin-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .admin-tab {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .admin-tab.active {
+            color: var(--secondary);
+            border-bottom-color: var(--secondary);
+            font-weight: 600;
+        }
+
+        .admin-panel { display: none; }
+        .admin-panel.active { display: block; }
+
+        .admin-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .admin-input:focus {
+            outline: none;
+            border-color: var(--secondary);
+        }
+
+        .admin-save-btn {
+            padding: 8px 20px;
+            background: var(--secondary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .admin-save-btn:hover { background: #7d3c98; }
+
+        .log-entry {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+
+        .log-entry:last-child { border-bottom: none; }
+
+        .log-timestamp { color: var(--text-light); font-size: 0.75rem; }
+        .log-query { font-weight: 500; }
+        .log-ip { color: var(--text-light); font-size: 0.75rem; }
+        .log-geo { color: var(--secondary); font-size: 0.75rem; }
+
+        /* ===== FAQ MODAL ===== */
+        .faq-modal .modal-content {
+            max-width: 600px;
+        }
+
+        .faq-modal h2 { margin-bottom: 15px; color: var(--primary); }
+        .faq-modal h3 { margin: 15px 0 8px; color: var(--secondary); }
+        .faq-modal p { color: var(--text-light); margin-bottom: 10px; }
+
+        /* ===== FILTERS BAR ===== */
+        .filters-bar {
+            display: none;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filters-bar.active { display: flex; }
+
+        .filter-chip {
+            padding: 6px 14px;
+            background: #f0e6f6;
+            color: var(--secondary);
+            border-radius: 16px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .main-container { padding: 10px; }
+            .chat-section { margin-bottom: 20px; }
+            .results-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+            .featured-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+            header h1 { font-size: 1rem; }
+            .stats-bar { display: none; }
+            .modal-content { padding: 20px; width: 95%; }
+        }
+
+        /* Hidden file input */
+        #imageUploadInput { display: none; }
+
+        /* Loading spinner */
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading-spinner.active { display: block; }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top-color: var(--secondary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="siteHeader">
+    <div class="header-left">
+        <svg class="header-logo" viewBox="0 0 36 36" fill="none">
+            <circle cx="18" cy="18" r="16" fill="rgba(255,255,255,0.15)"/>
+            <path d="M12 26V14l6-4 6 4v12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M15 26v-6h6v6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h1 id="siteTitle">AI Fashion Search</h1>
+    </div>
+    <div class="header-right">
+        <div class="stats-bar">
+            <span id="statsInfo"></span>
+            <span id="deviceInfo"></span>
+            <span class="faq-link" onclick="showFaqModal()" style="cursor:pointer">FAQ</span>
+        </div>
+        <button class="admin-btn" onclick="showAdminModal()">Admin</button>
+    </div>
+</header>
+
+<!-- MAIN -->
+<div class="main-container">
+
+    <!-- CHATBOT -->
+    <div class="chat-section">
+        <div class="chat-box">
+            <div class="chat-header">
+                <div class="chat-header-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                </div>
+                <h2>Assistant Mode</h2>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input-area" id="chatInputArea">
+                <input type="text" id="chatInput" placeholder="Decrivez ce que vous recherchez..." autocomplete="off">
+                <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()">Rechercher</button>
+            </div>
+            <div class="new-search-area" id="newSearchArea">
+                <button class="new-search-btn" onclick="resetChat()">Nouvelle recherche</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APPLIED FILTERS -->
+    <div class="filters-bar" id="filtersBar"></div>
+
+    <!-- LOADING -->
+    <div class="loading-spinner" id="loadingSpinner">
+        <div class="spinner"></div>
+        <p>Recherche en cours...</p>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="results-section" id="resultsSection">
+        <div class="results-header">
+            <h2>Resultats</h2>
+            <span class="results-count" id="resultsCount"></span>
+        </div>
+        <div class="results-grid" id="resultsGrid"></div>
+    </div>
+
+    <!-- FEATURED -->
+    <div class="featured-section" id="featuredSection">
+        <h2>A decouvrir</h2>
+        <div class="featured-grid" id="featuredGrid"></div>
+    </div>
+
+</div>
+
+<!-- PRODUCT DETAIL MODAL -->
+<div class="modal-overlay" id="productModal" onclick="if(event.target===this)closeProductModal()">
+    <div class="modal-content">
+        <button class="modal-close" onclick="closeProductModal()">&times;</button>
+        <div id="productModalBody"></div>
+    </div>
+</div>
+
+<!-- FAQ MODAL -->
+<div class="modal-overlay faq-modal" id="faqModal" onclick="if(event.target===this)closeFaqModal()">
+    <div class="modal-content">
+        <button class="modal-close" onclick="closeFaqModal()">&times;</button>
+        <div id="faqContent"></div>
+    </div>
+</div>
+
+<!-- ADMIN MODAL -->
+<div class="modal-overlay admin-modal" id="adminModal" onclick="if(event.target===this)closeAdminModal()">
+    <div class="modal-content">
+        <button class="modal-close" onclick="closeAdminModal()">&times;</button>
+        <h2 style="margin-bottom:15px;">Administration</h2>
+        <div style="margin-bottom:15px;">
+            <input class="admin-input" type="password" id="adminPassword" placeholder="Mot de passe admin">
+        </div>
+        <div class="admin-tabs">
+            <button class="admin-tab active" onclick="switchAdminTab('examples')">Exemples</button>
+            <button class="admin-tab" onclick="switchAdminTab('settings')">Settings</button>
+            <button class="admin-tab" onclick="switchAdminTab('faq')">FAQ</button>
+            <button class="admin-tab" onclick="switchAdminTab('logs')">Logs</button>
+        </div>
+        <div class="admin-panel active" id="adminExamples">
+            <textarea class="admin-input" id="adminExamplesText" rows="8" placeholder="Un exemple par ligne"></textarea>
+            <button class="admin-save-btn" onclick="saveExamples()">Sauvegarder</button>
+        </div>
+        <div class="admin-panel" id="adminSettings">
+            <label style="font-size:0.85rem;color:var(--text-light)">Titre du site</label>
+            <input class="admin-input" id="settingTitle" placeholder="Titre du site">
+            <label style="font-size:0.85rem;color:var(--text-light)">Sous-titre</label>
+            <input class="admin-input" id="settingSubtitle" placeholder="Sous-titre">
+            <label style="font-size:0.85rem;color:var(--text-light)">Couleur principale</label>
+            <input class="admin-input" type="color" id="settingPrimary" value="#2c3e50">
+            <label style="font-size:0.85rem;color:var(--text-light)">Couleur secondaire</label>
+            <input class="admin-input" type="color" id="settingSecondary" value="#8e44ad">
+            <br>
+            <button class="admin-save-btn" onclick="saveSettings()">Sauvegarder</button>
+        </div>
+        <div class="admin-panel" id="adminFaq">
+            <textarea class="admin-input" id="adminFaqText" rows="10" placeholder="Contenu FAQ (HTML)"></textarea>
+            <button class="admin-save-btn" onclick="saveFaq()">Sauvegarder</button>
+        </div>
+        <div class="admin-panel" id="adminLogs">
+            <button class="admin-save-btn" onclick="loadLogs()" style="margin-bottom:10px;">Charger les logs</button>
+            <div id="logsContainer" style="max-height:400px;overflow-y:auto;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden image upload -->
+<input type="file" id="imageUploadInput" accept="image/*" onchange="handleImageUpload(event)">
+
+<script>
+// ===================== STATE =====================
+let chatState = {
+    step: 'welcome',  // welcome, gender, context, query, results
+    gender: null,
+    context: null,
+    query: null
+};
+
+// ===================== INIT =====================
+document.addEventListener('DOMContentLoaded', () => {
+    loadStats();
+    loadSettings();
+    loadFeatured();
+    startChat();
+
+    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') sendChatMessage();
+    });
+});
+
+// ===================== CHATBOT =====================
+function startChat() {
+    chatState = { step: 'welcome', gender: null, context: null, query: null };
+    document.getElementById('chatMessages').innerHTML = '';
+    document.getElementById('chatInputArea').classList.remove('active');
+    document.getElementById('newSearchArea').classList.remove('active');
+    document.getElementById('resultsSection').classList.remove('active');
+    document.getElementById('filtersBar').classList.remove('active');
+    document.getElementById('loadingSpinner').classList.remove('active');
+    document.getElementById('featuredSection').style.display = '';
+
+    addBotMessage("Bonjour ! Je suis votre assistant mode. Trouvons la tenue parfaite.");
+
+    setTimeout(() => {
+        addBotMessage("Vous cherchez une tenue mixte, pour homme ou pour femme ?");
+        addOptions([
+            { label: 'Mixte', value: 'mixte' },
+            { label: 'Homme', value: 'homme' },
+            { label: 'Femme', value: 'femme' }
+        ], handleGenderChoice);
+        chatState.step = 'gender';
+    }, 600);
+}
+
+function resetChat() {
+    startChat();
+}
+
+function addBotMessage(text) {
+    const container = document.getElementById('chatMessages');
+    const msg = document.createElement('div');
+    msg.className = 'chat-msg bot';
+    msg.innerHTML = `
+        <div class="chat-avatar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="chat-bubble">${text}</div>
+    `;
+    container.appendChild(msg);
+    scrollChat();
+}
+
+function addUserMessage(text) {
+    const container = document.getElementById('chatMessages');
+    const msg = document.createElement('div');
+    msg.className = 'chat-msg user';
+    msg.innerHTML = `
+        <div class="chat-avatar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        </div>
+        <div class="chat-bubble">${text}</div>
+    `;
+    container.appendChild(msg);
+    scrollChat();
+}
+
+function addOptions(options, callback) {
+    const container = document.getElementById('chatMessages');
+    const optDiv = document.createElement('div');
+    optDiv.className = 'chat-msg bot';
+    optDiv.style.maxWidth = '100%';
+
+    let optionsHtml = '<div class="chat-options">';
+    options.forEach(opt => {
+        optionsHtml += `<button class="chat-option-btn" data-value="${opt.value}">${opt.label}</button>`;
+    });
+    // Add image search option if in context step
+    if (chatState.step === 'context') {
+        optionsHtml += `<button class="chat-image-btn" onclick="triggerImageUpload()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Recherche par image
+        </button>`;
+    }
+    optionsHtml += '</div>';
+
+    optDiv.innerHTML = optionsHtml;
+    container.appendChild(optDiv);
+
+    optDiv.querySelectorAll('.chat-option-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.classList.add('selected');
+            // Disable all buttons in this group
+            optDiv.querySelectorAll('.chat-option-btn, .chat-image-btn').forEach(b => {
+                b.style.pointerEvents = 'none';
+                if (!b.classList.contains('selected')) b.style.opacity = '0.5';
+            });
+            callback(btn.dataset.value, btn.textContent);
+        });
+    });
+
+    scrollChat();
+}
+
+function addTypingIndicator() {
+    const container = document.getElementById('chatMessages');
+    const typing = document.createElement('div');
+    typing.className = 'chat-msg bot';
+    typing.id = 'typingIndicator';
+    typing.innerHTML = `
+        <div class="chat-avatar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="chat-bubble">
+            <div class="typing-indicator"><span></span><span></span><span></span></div>
+        </div>
+    `;
+    container.appendChild(typing);
+    scrollChat();
+}
+
+function removeTypingIndicator() {
+    const el = document.getElementById('typingIndicator');
+    if (el) el.remove();
+}
+
+function scrollChat() {
+    const container = document.getElementById('chatMessages');
+    container.scrollTop = container.scrollHeight;
+}
+
+// ===================== CHAT FLOW HANDLERS =====================
+function handleGenderChoice(value, label) {
+    chatState.gender = value;
+    addUserMessage(label);
+
+    setTimeout(() => {
+        addBotMessage("Pour quel contexte ?");
+        addOptions([
+            { label: 'Classique', value: 'classique' },
+            { label: 'Bureau', value: 'bureau' },
+            { label: 'Ceremonie', value: 'ceremonie' },
+            { label: 'Sport', value: 'sport' },
+            { label: 'Soiree', value: 'soiree' },
+            { label: 'Casual', value: 'casual' }
+        ], handleContextChoice);
+        chatState.step = 'context';
+    }, 400);
+}
+
+function handleContextChoice(value, label) {
+    chatState.context = value;
+    addUserMessage(label);
+
+    setTimeout(() => {
+        addBotMessage("Decrivez ce que vous recherchez (couleur, style, matiere...)");
+        document.getElementById('chatInputArea').classList.add('active');
+        document.getElementById('chatInput').focus();
+        chatState.step = 'query';
+    }, 400);
+}
+
+function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const query = input.value.trim();
+    if (!query) return;
+
+    chatState.query = query;
+    addUserMessage(query);
+    input.value = '';
+    document.getElementById('chatInputArea').classList.remove('active');
+
+    performSearch(query);
+}
+
+// ===================== SEARCH =====================
+async function performSearch(query) {
+    addTypingIndicator();
+    document.getElementById('loadingSpinner').classList.add('active');
+    document.getElementById('featuredSection').style.display = 'none';
+
+    try {
+        const body = {
+            query: query,
+            limit: 20,
+            smart: true,
+            gender: chatState.gender,
+            context: chatState.context
+        };
+
+        const response = await fetch('/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+
+        removeTypingIndicator();
+        document.getElementById('loadingSpinner').classList.remove('active');
+
+        if (data.total_results > 0) {
+            addBotMessage(`J'ai trouve ${data.total_results} articles qui correspondent a votre recherche !`);
+        } else {
+            addBotMessage("Desole, je n'ai pas trouve de resultats pour cette recherche. Essayez avec d'autres termes.");
+        }
+
+        document.getElementById('newSearchArea').classList.add('active');
+        displayResults(data);
+        displayFilters(data.applied_filters);
+
+    } catch (err) {
+        removeTypingIndicator();
+        document.getElementById('loadingSpinner').classList.remove('active');
+        addBotMessage("Oups, une erreur est survenue. Veuillez reessayer.");
+        document.getElementById('newSearchArea').classList.add('active');
+        console.error('Search error:', err);
+    }
+}
+
+async function performImageSearch(file) {
+    addTypingIndicator();
+    document.getElementById('loadingSpinner').classList.add('active');
+    document.getElementById('featuredSection').style.display = 'none';
+
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('limit', '20');
+
+        const response = await fetch('/search/image', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+
+        removeTypingIndicator();
+        document.getElementById('loadingSpinner').classList.remove('active');
+
+        if (data.total_results > 0) {
+            addBotMessage(`J'ai trouve ${data.total_results} articles similaires a votre image !`);
+        } else {
+            addBotMessage("Desole, je n'ai pas trouve d'articles similaires.");
+        }
+
+        document.getElementById('newSearchArea').classList.add('active');
+        document.getElementById('chatInputArea').classList.remove('active');
+        displayResults(data);
+
+    } catch (err) {
+        removeTypingIndicator();
+        document.getElementById('loadingSpinner').classList.remove('active');
+        addBotMessage("Oups, une erreur est survenue lors de la recherche par image.");
+        document.getElementById('newSearchArea').classList.add('active');
+        console.error('Image search error:', err);
+    }
+}
+
+// ===================== DISPLAY RESULTS =====================
+function displayResults(data) {
+    const grid = document.getElementById('resultsGrid');
+    const section = document.getElementById('resultsSection');
+    const count = document.getElementById('resultsCount');
+
+    grid.innerHTML = '';
+    count.textContent = `${data.total_results} articles trouves`;
+
+    data.results.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        card.onclick = () => showProductDetail(r.product_id, r);
+
+        const priceHtml = r.price ? `<div class="product-card-price">\u00a3${r.price.toFixed(2)}</div>` : '';
+        const brandHtml = r.brand ? `<div class="product-card-brand">${escapeHtml(r.brand)}</div>` : '';
+        const nameHtml = r.product_name ? escapeHtml(r.product_name) : (r.filename || 'Produit');
+
+        card.innerHTML = `
+            <img class="product-card-img" src="data:image/jpeg;base64,${r.thumbnail_base64}" alt="${nameHtml}" loading="lazy">
+            <div class="product-card-info">
+                <div class="product-card-name">${nameHtml}</div>
+                ${brandHtml}
+                ${priceHtml}
+                <div class="product-card-score">${(r.score * 100).toFixed(0)}% match</div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+    section.classList.add('active');
+}
+
+function displayFilters(filters) {
+    const bar = document.getElementById('filtersBar');
+    bar.innerHTML = '';
+
+    if (!filters) {
+        bar.classList.remove('active');
+        return;
+    }
+
+    let chips = [];
+    if (filters.categories && filters.categories.length) {
+        chips.push(`Categories: ${filters.categories.join(', ')}`);
+    }
+    if (filters.colors && filters.colors.length) {
+        chips.push(`Couleurs: ${filters.colors.join(', ')}`);
+    }
+    if (filters.min_price != null || filters.max_price != null) {
+        let priceText = 'Prix: ';
+        if (filters.min_price != null && filters.max_price != null) {
+            priceText += `\u00a3${filters.min_price.toFixed(0)} - \u00a3${filters.max_price.toFixed(0)}`;
+        } else if (filters.max_price != null) {
+            priceText += `max \u00a3${filters.max_price.toFixed(0)}`;
+        } else {
+            priceText += `min \u00a3${filters.min_price.toFixed(0)}`;
+        }
+        chips.push(priceText);
+    }
+    if (filters.gender) {
+        chips.push(`Genre: ${filters.gender}`);
+    }
+    if (filters.brands && filters.brands.length) {
+        chips.push(`Marques: ${filters.brands.join(', ')}`);
+    }
+
+    if (chips.length) {
+        chips.forEach(chip => {
+            const el = document.createElement('div');
+            el.className = 'filter-chip';
+            el.textContent = chip;
+            bar.appendChild(el);
+        });
+        bar.classList.add('active');
+    } else {
+        bar.classList.remove('active');
+    }
+}
+
+// ===================== PRODUCT DETAIL =====================
+async function showProductDetail(productId, fallbackData) {
+    const modal = document.getElementById('productModal');
+    const body = document.getElementById('productModalBody');
+
+    // Use fallback data immediately
+    let product = fallbackData;
+
+    // Try to load full product detail
+    if (productId) {
+        try {
+            const response = await fetch(`/product/${productId}`);
+            if (response.ok) {
+                product = await response.json();
+                product._hasPhotos = true;
+            }
+        } catch (e) {
+            console.warn('Could not load product detail:', e);
+        }
+    }
+
+    let imagesHtml = '';
+    if (product._hasPhotos && product.photos) {
+        imagesHtml = '<div class="modal-images">';
+        product.photos.forEach(p => {
+            imagesHtml += `<img class="modal-img" src="data:image/jpeg;base64,${p.thumbnail_base64}" alt="">`;
+        });
+        imagesHtml += '</div>';
+    } else if (product.thumbnail_base64) {
+        imagesHtml = `<div class="modal-images"><img class="modal-img" src="data:image/jpeg;base64,${product.thumbnail_base64}" alt=""></div>`;
+    }
+
+    const name = product.product_name || product.filename || 'Produit';
+    const brand = product.brand || '';
+    const price = product.price ? `\u00a3${product.price.toFixed(2)}` : '';
+    const desc = product.description || '';
+    const category = product.category || '';
+    const color = product.color || '';
+    const gender = product.gender || '';
+    const url = product.product_url || '';
+
+    let tagsHtml = '';
+    if (category) tagsHtml += `<span class="modal-tag">${escapeHtml(category)}</span>`;
+    if (color) tagsHtml += `<span class="modal-tag">${escapeHtml(color)}</span>`;
+    if (gender) tagsHtml += `<span class="modal-tag">${escapeHtml(gender)}</span>`;
+
+    body.innerHTML = `
+        ${imagesHtml}
+        <div class="modal-info">
+            <h3>${escapeHtml(name)}</h3>
+            ${brand ? `<div class="modal-brand">${escapeHtml(brand)}</div>` : ''}
+            ${price ? `<div class="modal-price">${price}</div>` : ''}
+            ${desc ? `<div class="modal-desc">${escapeHtml(desc)}</div>` : ''}
+            <div class="modal-meta">${tagsHtml}</div>
+            ${url ? `<a class="modal-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">Voir sur le site</a>` : ''}
+        </div>
+    `;
+
+    modal.classList.add('active');
+}
+
+function closeProductModal() {
+    document.getElementById('productModal').classList.remove('active');
+}
+
+// ===================== IMAGE UPLOAD =====================
+function triggerImageUpload() {
+    document.getElementById('imageUploadInput').click();
+}
+
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    addUserMessage(`[Image: ${file.name}]`);
+    performImageSearch(file);
+    event.target.value = '';
+}
+
+// ===================== FEATURED =====================
+async function loadFeatured() {
+    try {
+        const response = await fetch('/featured?limit=12');
+        if (!response.ok) return;
+        const products = await response.json();
+
+        const grid = document.getElementById('featuredGrid');
+        grid.innerHTML = '';
+
+        if (products.length === 0) {
+            document.getElementById('featuredSection').style.display = 'none';
+            return;
+        }
+
+        products.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+            card.onclick = () => showProductDetail(p.product_id, p);
+
+            const priceHtml = p.price ? `<div class="product-card-price">\u00a3${p.price.toFixed(2)}</div>` : '';
+
+            card.innerHTML = `
+                <img class="product-card-img" src="data:image/jpeg;base64,${p.thumbnail_base64}" alt="" loading="lazy">
+                <div class="product-card-info">
+                    <div class="product-card-name">${escapeHtml(p.product_name || 'Produit')}</div>
+                    ${p.brand ? `<div class="product-card-brand">${escapeHtml(p.brand)}</div>` : ''}
+                    ${priceHtml}
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+
+    } catch (e) {
+        console.warn('Failed to load featured:', e);
+        document.getElementById('featuredSection').style.display = 'none';
+    }
+}
+
+// ===================== STATS =====================
+async function loadStats() {
+    try {
+        const response = await fetch('/stats');
+        if (!response.ok) return;
+        const data = await response.json();
+
+        const statsEl = document.getElementById('statsInfo');
+        const deviceEl = document.getElementById('deviceInfo');
+
+        if (data.count > 0) {
+            statsEl.textContent = `${data.count} articles indexes | ${data.model_name || 'Fashion CLIP'}`;
+        }
+        if (data.device_info) {
+            const d = data.device_info;
+            deviceEl.textContent = d.gpu_name ? `GPU: ${d.gpu_name}` : `CPU mode`;
+        }
+    } catch (e) {
+        console.warn('Failed to load stats:', e);
+    }
+}
+
+// ===================== SETTINGS =====================
+async function loadSettings() {
+    try {
+        const response = await fetch('/admin/settings');
+        if (!response.ok) return;
+        const data = await response.json();
+        const s = data.settings;
+
+        if (s.site_title) {
+            document.getElementById('siteTitle').textContent = s.site_title;
+            document.title = s.site_title;
+        }
+        if (s.primary_color) {
+            document.documentElement.style.setProperty('--primary', s.primary_color);
+            document.getElementById('siteHeader').style.background = s.primary_color;
+        }
+        if (s.secondary_color) {
+            document.documentElement.style.setProperty('--secondary', s.secondary_color);
+        }
+    } catch (e) {
+        console.warn('Failed to load settings:', e);
+    }
+}
+
+// ===================== FAQ =====================
+async function showFaqModal() {
+    try {
+        const response = await fetch('/faq');
+        if (!response.ok) return;
+        const data = await response.json();
+        document.getElementById('faqContent').innerHTML = data.content || '';
+    } catch (e) {
+        document.getElementById('faqContent').innerHTML = '<p>Impossible de charger la FAQ.</p>';
+    }
+    document.getElementById('faqModal').classList.add('active');
+}
+
+function closeFaqModal() {
+    document.getElementById('faqModal').classList.remove('active');
+}
+
+// ===================== ADMIN =====================
+function showAdminModal() {
+    document.getElementById('adminModal').classList.add('active');
+    loadAdminExamples();
+    loadAdminSettings();
+    loadAdminFaq();
+}
+
+function closeAdminModal() {
+    document.getElementById('adminModal').classList.remove('active');
+}
+
+function switchAdminTab(tab) {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+
+    event.target.classList.add('active');
+    const panelMap = { examples: 'adminExamples', settings: 'adminSettings', faq: 'adminFaq', logs: 'adminLogs' };
+    document.getElementById(panelMap[tab]).classList.add('active');
+}
+
+async function loadAdminExamples() {
+    try {
+        const r = await fetch('/admin/examples');
+        const data = await r.json();
+        document.getElementById('adminExamplesText').value = data.examples.join('\n');
+    } catch (e) { console.warn(e); }
+}
+
+async function saveExamples() {
+    const pw = document.getElementById('adminPassword').value;
+    const examples = document.getElementById('adminExamplesText').value.split('\n').filter(e => e.trim());
+    try {
+        const r = await fetch('/admin/examples', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pw, examples })
+        });
+        if (r.ok) alert('Exemples sauvegardes !');
+        else alert('Erreur: ' + (await r.json()).detail);
+    } catch (e) { alert('Erreur: ' + e.message); }
+}
+
+async function loadAdminSettings() {
+    try {
+        const r = await fetch('/admin/settings');
+        const data = await r.json();
+        const s = data.settings;
+        document.getElementById('settingTitle').value = s.site_title || '';
+        document.getElementById('settingSubtitle').value = s.site_subtitle || '';
+        document.getElementById('settingPrimary').value = s.primary_color || '#2c3e50';
+        document.getElementById('settingSecondary').value = s.secondary_color || '#8e44ad';
+    } catch (e) { console.warn(e); }
+}
+
+async function saveSettings() {
+    const pw = document.getElementById('adminPassword').value;
+    const settings = {
+        site_title: document.getElementById('settingTitle').value,
+        site_subtitle: document.getElementById('settingSubtitle').value,
+        primary_color: document.getElementById('settingPrimary').value,
+        secondary_color: document.getElementById('settingSecondary').value,
+    };
+    try {
+        const r = await fetch('/admin/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pw, settings })
+        });
+        if (r.ok) {
+            alert('Settings sauvegardes !');
+            loadSettings();
+        } else {
+            alert('Erreur: ' + (await r.json()).detail);
+        }
+    } catch (e) { alert('Erreur: ' + e.message); }
+}
+
+async function loadAdminFaq() {
+    try {
+        const r = await fetch('/faq');
+        const data = await r.json();
+        document.getElementById('adminFaqText').value = data.content || '';
+    } catch (e) { console.warn(e); }
+}
+
+async function saveFaq() {
+    const pw = document.getElementById('adminPassword').value;
+    const content = document.getElementById('adminFaqText').value;
+    try {
+        const r = await fetch('/admin/faq', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pw, content })
+        });
+        if (r.ok) alert('FAQ sauvegardee !');
+        else alert('Erreur: ' + (await r.json()).detail);
+    } catch (e) { alert('Erreur: ' + e.message); }
+}
+
+async function loadLogs() {
+    const pw = document.getElementById('adminPassword').value;
+    try {
+        const r = await fetch(`/admin/logs?password=${encodeURIComponent(pw)}&limit=100`);
+        if (!r.ok) { alert('Erreur: ' + (await r.json()).detail); return; }
+        const data = await r.json();
+        const container = document.getElementById('logsContainer');
+        container.innerHTML = '';
+
+        data.logs.forEach(log => {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            let geoHtml = '';
+            if (log.geolocation) {
+                const g = log.geolocation;
+                geoHtml = `<span class="log-geo">${g.city || ''}, ${g.country || ''}</span>`;
+            }
+            entry.innerHTML = `
+                <span class="log-timestamp">${new Date(log.timestamp).toLocaleString()}</span>
+                <span class="log-query"> ${escapeHtml(log.query)}</span>
+                <span class="log-ip">${log.ip || ''}</span>
+                ${geoHtml}
+                <span style="color:var(--text-light);font-size:0.75rem;"> (${log.results_count} results)</span>
+            `;
+            container.appendChild(entry);
+        });
+
+        if (data.logs.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-light);padding:10px;">Aucun log.</p>';
+        }
+    } catch (e) { alert('Erreur: ' + e.message); }
+}
+
+// ===================== UTILS =====================
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+</body>
+</html>

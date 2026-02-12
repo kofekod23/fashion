@@ -1,0 +1,42 @@
+[project]
+name = "fashion-search-engine"
+version = "0.1.0"
+description = "Fashion search engine using Fashion CLIP and Weaviate"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Core
+    "weaviate-client>=4.0",
+    "transformers>=4.30.0,<5.0.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "Pillow>=10.0.0",
+    # Web
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.6",
+    # Utils
+    "python-dotenv>=1.0.0",
+    "tqdm>=4.65.0",
+    "httpx>=0.24.0",
+    # ASOS dataset
+    "datasets>=2.14.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[project.scripts]
+index-asos = "scripts.index_asos:main"

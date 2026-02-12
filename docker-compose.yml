@@ -1,0 +1,87 @@
+# Docker Compose for Fashion Search Engine
+# Includes Weaviate vector database
+
+services:
+  # Weaviate Vector Database
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.28.2
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'none'
+      CLUSTER_HOSTNAME: 'node1'
+      ENABLE_API_BASED_MODULES: 'true'
+      LIMIT_RESOURCES: 'false'
+      GOMAXPROCS: '4'
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    restart: unless-stopped
+    healthcheck:
+      test: wget --no-verbose --tries=3 --spider http://localhost:8080/v1/.well-known/ready || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # Web Application (CPU)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - WEAVIATE_URL=http://weaviate:8080
+      - WEAVIATE_API_KEY=
+      - DEVICE=cpu
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - model-cache:/root/.cache
+    depends_on:
+      weaviate:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Index ASOS dataset
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - WEAVIATE_URL=http://weaviate:8080
+      - WEAVIATE_API_KEY=
+      - DEVICE=cpu
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - model-cache:/root/.cache
+    depends_on:
+      weaviate:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo 'Indexing ASOS dataset...'
+        python scripts/index_asos.py --max-items 500
+        echo 'Indexing complete!'
+      "
+    profiles:
+      - setup
+
+volumes:
+  weaviate-data:
+    driver: local
+  model-cache:
+    driver: local
