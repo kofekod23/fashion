@@ -6,6 +6,7 @@ Usage:
 """
 
 import argparse
+import ast
 import base64
 import io
 import logging
@@ -21,25 +22,39 @@ logger = logging.getLogger(__name__)
 
 
 def extract_images(images_field) -> list[str]:
-    """Extract image URLs from the dataset images field (already a list)."""
+    """Extract image URLs from the dataset images field (string repr of a list)."""
     if not images_field:
         return []
+    if isinstance(images_field, str):
+        # Field is a string like "['url1', 'url2']"
+        try:
+            parsed = ast.literal_eval(images_field)
+            if isinstance(parsed, list):
+                return [u for u in parsed if isinstance(u, str) and u.startswith("http")]
+        except (ValueError, SyntaxError):
+            pass
+        if images_field.startswith("http"):
+            return [images_field]
     if isinstance(images_field, list):
         return [u for u in images_field if isinstance(u, str) and u.startswith("http")]
-    if isinstance(images_field, str) and images_field.startswith("http"):
-        return [images_field]
     return []
 
 
 def extract_description(desc_field) -> tuple[str | None, str]:
-    """Extract brand and text from ASOS description field (list of dicts)."""
+    """Extract brand and text from ASOS description field (string repr of list of dicts)."""
     if not desc_field:
         return None, ""
-    # Dataset returns a list of dicts like [{"Product Details": "..."}, {"Brand": "..."}]
-    if isinstance(desc_field, list):
+    data = desc_field
+    # Field is a string like "[{'Product Details': '...'}, {'Brand': '...'}]"
+    if isinstance(data, str):
+        try:
+            data = ast.literal_eval(data)
+        except (ValueError, SyntaxError):
+            return None, str(desc_field)
+    if isinstance(data, list):
         brand = None
         texts = []
-        for entry in desc_field:
+        for entry in data:
             if isinstance(entry, dict):
                 for key, val in entry.items():
                     if "brand" in key.lower():
