@@ -8,11 +8,8 @@ Usage:
 import argparse
 import base64
 import io
-import json
 import logging
-import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 import requests
@@ -23,60 +20,54 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-def parse_price(price_str: str) -> float | None:
-    """Parse ASOS price string like '£45.00' or '$29.99' to float."""
-    if not price_str:
+def extract_images(images_field) -> list[str]:
+    """Extract image URLs from the dataset images field (already a list)."""
+    if not images_field:
+        return []
+    if isinstance(images_field, list):
+        return [u for u in images_field if isinstance(u, str) and u.startswith("http")]
+    if isinstance(images_field, str) and images_field.startswith("http"):
+        return [images_field]
+    return []
+
+
+def extract_description(desc_field) -> tuple[str | None, str]:
+    """Extract brand and text from ASOS description field (list of dicts)."""
+    if not desc_field:
+        return None, ""
+    # Dataset returns a list of dicts like [{"Product Details": "..."}, {"Brand": "..."}]
+    if isinstance(desc_field, list):
+        brand = None
+        texts = []
+        for entry in desc_field:
+            if isinstance(entry, dict):
+                for key, val in entry.items():
+                    if "brand" in key.lower():
+                        brand = str(val) if val else None
+                    else:
+                        texts.append(str(val))
+        return brand, " ".join(texts)
+    return None, str(desc_field)
+
+
+def extract_price(price_field) -> float | None:
+    """Extract price (already a float in the dataset)."""
+    if price_field is None:
         return None
     try:
-        cleaned = price_str.strip().replace("£", "").replace("$", "").replace(",", "").strip()
-        return float(cleaned)
-    except (ValueError, AttributeError):
+        val = float(price_field)
+        return val if val > 0 else None
+    except (ValueError, TypeError):
         return None
-
-
-def parse_description(desc_str: str) -> dict:
-    """Parse ASOS product description (may be JSON or plain text)."""
-    if not desc_str:
-        return {"brand": None, "text": None}
-    try:
-        data = json.loads(desc_str)
-        if isinstance(data, dict):
-            return {
-                "brand": data.get("brand") or data.get("Brand"),
-                "text": data.get("description") or data.get("Description") or str(data),
-            }
-        return {"brand": None, "text": str(data)}
-    except (json.JSONDecodeError, TypeError):
-        return {"brand": None, "text": str(desc_str)}
-
-
-def parse_images(images_str: str) -> list[str]:
-    """Parse ASOS images field (JSON array of URLs or single URL)."""
-    if not images_str:
-        return []
-    try:
-        data = json.loads(images_str)
-        if isinstance(data, list):
-            return [url for url in data if isinstance(url, str) and url.startswith("http")]
-        if isinstance(data, str) and data.startswith("http"):
-            return [data]
-        return []
-    except (json.JSONDecodeError, TypeError):
-        if isinstance(images_str, str) and images_str.startswith("http"):
-            return [images_str]
-        return []
 
 
 def detect_gender(product_name: str, category: str) -> str | None:
     """Detect gender from product name or category."""
     text = f"{product_name} {category}".lower()
-    men_keywords = ["men's", "mens", "male", "homme", " man ", "for men"]
-    women_keywords = ["women's", "womens", "female", "femme", " woman ", "for women", "ladies", "maternity"]
-
-    for kw in women_keywords:
+    for kw in ["women's", "womens", "female", "femme", " woman ", "for women", "ladies", "maternity"]:
         if kw in text:
             return "women"
-    for kw in men_keywords:
+    for kw in ["men's", "mens", "male", "homme", " man ", "for men"]:
         if kw in text:
             return "men"
     return None
@@ -108,21 +99,15 @@ def process_product(item: dict, model, max_images: int = 1, thumbnail_size: int 
     """Process a single ASOS product and return ImageDocument dicts."""
     from src.database.weaviate_client import ImageDocument
 
-    product_id = str(item.get("id", item.get("Unnamed: 0", "")))
-    product_name = item.get("product_name", item.get("name", ""))
-    category = item.get("category", item.get("product_type", ""))
-    color = item.get("colour", item.get("color", ""))
-    price_str = item.get("price", item.get("current_price", ""))
-    price = parse_price(str(price_str)) if price_str else None
-    product_url = item.get("url", item.get("product_url", ""))
+    product_id = str(item.get("sku", ""))
+    product_name = item.get("name", "")
+    category = item.get("category", "")
+    color = item.get("color", "")
+    price = extract_price(item.get("price"))
+    product_url = item.get("url", "")
 
-    desc_data = parse_description(item.get("description", ""))
-    brand = desc_data["brand"] or item.get("brand", "")
-    description = desc_data["text"] or ""
-
-    images_str = item.get("images", item.get("image", ""))
-    image_urls = parse_images(str(images_str))
-
+    brand, description = extract_description(item.get("description"))
+    image_urls = extract_images(item.get("images"))
     gender = detect_gender(product_name or "", category or "")
 
     documents = []
@@ -150,7 +135,7 @@ def process_product(item: dict, model, max_images: int = 1, thumbnail_size: int 
                 category=category,
                 color=color,
                 price=price,
-                brand=brand,
+                brand=brand or "",
                 product_url=product_url,
                 description=description,
                 image_index=idx,
@@ -168,7 +153,6 @@ def main():
     parser.add_argument("--max-items", type=int, default=None, help="Max products to index (default: all)")
     parser.add_argument("--max-images-per-product", type=int, default=1, help="Max images per product (default: 1)")
     parser.add_argument("--batch-size", type=int, default=50, help="Weaviate batch insert size")
-    parser.add_argument("--workers", type=int, default=4, help="Download/processing workers")
     args = parser.parse_args()
 
     print("=" * 60)
