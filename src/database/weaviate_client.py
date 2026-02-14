@@ -451,13 +451,13 @@ class WeaviateClient:
         limit: int = 20,
         filters: SearchFilters | None = None,
     ) -> list[SearchResult]:
-        """Hybrid search: BM25 + 3 vector models with RRF fusion.
+        """Hybrid search: BM25 (2x weight) + 3 vector models with RRF fusion.
 
-        4 separate sources, each with equal weight in RRF:
-        1. Pure BM25 on product_name, description, category, color
-        2. near_vector Fashion CLIP (512d)
-        3. near_vector Marqo CLIP (512d)
-        4. near_vector SigLIP2 (1152d)
+        5 sources in RRF (BM25 counted twice for more keyword influence):
+        1-2. Pure BM25 on product_name, category, color, description, occasion
+        3. near_vector Fashion CLIP (512d)
+        4. near_vector Marqo CLIP (512d)
+        5. near_vector SigLIP2 (1152d)
         """
         try:
             if not self.collection_exists():
@@ -470,11 +470,17 @@ class WeaviateClient:
 
             result_lists: list[list[SearchResult]] = []
 
-            # 1. Pure BM25 keyword search
+            # 1-2. Pure BM25 keyword search (counted twice in RRF for more weight)
             try:
                 bm25_kwargs = dict(
                     query=query,
-                    query_properties=["color", "category", "description", "occasion"],
+                    query_properties=[
+                        "product_name^3",
+                        "category^2",
+                        "color^2",
+                        "description",
+                        "occasion",
+                    ],
                     limit=fetch_limit,
                     return_metadata=MetadataQuery(score=True),
                 )
@@ -482,15 +488,18 @@ class WeaviateClient:
                     bm25_kwargs["filters"] = weaviate_filter
 
                 bm25_results = collection.query.bm25(**bm25_kwargs)
-                result_lists.append([
+                bm25_list = [
                     self._obj_to_result(obj, obj.metadata.score or 0)
                     for obj in bm25_results.objects
-                ])
-                logger.info(f"BM25: {len(bm25_results.objects)} results")
+                ]
+                # Add BM25 twice in RRF to give keywords more weight (2/5 vs 3/5)
+                result_lists.append(bm25_list)
+                result_lists.append(bm25_list)
+                logger.info(f"BM25: {len(bm25_results.objects)} results (2x weight in RRF)")
             except Exception as e:
                 logger.warning(f"BM25 search failed: {e}")
 
-            # 2-4. near_vector for each model
+            # 3-5. near_vector for each model
             for vec_name, vec in vectors.items():
                 try:
                     nv_kwargs = dict(
@@ -514,7 +523,7 @@ class WeaviateClient:
                 logger.warning("No search results from any source")
                 return []
 
-            # RRF fusion of all 4 sources
+            # RRF fusion of all 5 sources (BM25 x2 + 3 vectors)
             fused = self._rrf_fusion(result_lists, limit)
             logger.info(f"RRF fusion: {len(result_lists)} sources → {len(fused)} results")
             return fused
