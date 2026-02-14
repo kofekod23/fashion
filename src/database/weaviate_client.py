@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import weaviate
 from weaviate.classes.config import Configure, DataType, Property, VectorDistances
-from weaviate.classes.query import Filter, MetadataQuery
+from weaviate.classes.query import Filter, HybridFusion, MetadataQuery
 
 from src.config import Config
 
@@ -146,10 +146,22 @@ class WeaviateClient:
             self.connect()
         return self._client
 
-    def create_schema(self, vector_dimension: int) -> None:
-        """Create the fashion collection schema."""
+    VECTOR_NAMES = ["fashion_clip", "marqo_clip", "siglip2"]
+
+    def create_schema(self, vector_dimension: int = 0) -> None:
+        """Create the fashion collection schema with named vectors."""
         if self.client.collections.exists(self.collection_name):
             self.client.collections.delete(self.collection_name)
+
+        named_vectors = [
+            Configure.NamedVectors.none(
+                name=name,
+                vector_index_config=Configure.VectorIndex.hnsw(
+                    distance_metric=VectorDistances.COSINE
+                ),
+            )
+            for name in self.VECTOR_NAMES
+        ]
 
         self.client.collections.create(
             name=self.collection_name,
@@ -173,10 +185,7 @@ class WeaviateClient:
                 Property(name="image_index", data_type=DataType.INT),
                 Property(name="gender", data_type=DataType.TEXT),
             ],
-            vectorizer_config=Configure.Vectorizer.none(),
-            vector_index_config=Configure.VectorIndex.hnsw(
-                distance_metric=VectorDistances.COSINE
-            ),
+            vectorizer_config=named_vectors,
         )
 
     def collection_exists(self) -> bool:
@@ -380,6 +389,220 @@ class WeaviateClient:
     ) -> list[SearchResult]:
         """Search for similar images by image vector."""
         return self.search_by_vector(image_vector, limit, filters)
+
+    @staticmethod
+    def _obj_to_result(obj, score: float = 0.0) -> SearchResult:
+        """Convert a Weaviate object to a SearchResult."""
+        return SearchResult(
+            filename=obj.properties.get("filename", ""),
+            path=obj.properties.get("path", ""),
+            thumbnail_base64=obj.properties.get("thumbnail_base64", ""),
+            score=score,
+            width=obj.properties.get("width"),
+            height=obj.properties.get("height"),
+            product_id=obj.properties.get("product_id"),
+            product_name=obj.properties.get("product_name"),
+            category=obj.properties.get("category"),
+            color=obj.properties.get("color"),
+            size=obj.properties.get("size"),
+            price=obj.properties.get("price"),
+            brand=obj.properties.get("brand"),
+            product_url=obj.properties.get("product_url"),
+            description=obj.properties.get("description"),
+            image_index=obj.properties.get("image_index"),
+            gender=obj.properties.get("gender"),
+        )
+
+    @staticmethod
+    def _rrf_fusion(
+        result_lists: list[list[SearchResult]],
+        limit: int,
+        k: int = 60,
+    ) -> list[SearchResult]:
+        """Reciprocal Rank Fusion of multiple result lists."""
+        scores: dict[str, float] = {}
+        result_map: dict[str, SearchResult] = {}
+
+        for results in result_lists:
+            for rank, result in enumerate(results):
+                key = result.product_id or result.filename
+                scores[key] = scores.get(key, 0) + 1 / (k + rank + 1)
+                if key not in result_map:
+                    result_map[key] = result
+
+        sorted_keys = sorted(scores, key=lambda x: scores[x], reverse=True)
+
+        fused = []
+        for key in sorted_keys[:limit]:
+            r = result_map[key]
+            r.score = scores[key]
+            fused.append(r)
+        return fused
+
+    def search_hybrid(
+        self,
+        query: str,
+        vectors: dict[str, np.ndarray],
+        limit: int = 20,
+        filters: SearchFilters | None = None,
+    ) -> list[SearchResult]:
+        """Hybrid search: BM25 + multi-vector with RRF fusion.
+
+        1. Weaviate hybrid (BM25 + Fashion CLIP vector) on text properties
+        2. near_vector with Marqo CLIP
+        3. near_vector with SigLIP2
+        4. RRF fusion of all results
+        """
+        try:
+            if not self.collection_exists():
+                logger.warning(f"Collection '{self.collection_name}' does not exist")
+                return []
+
+            collection = self.client.collections.get(self.collection_name)
+            weaviate_filter = self._build_filter(filters)
+            fetch_limit = limit * 3
+
+            result_lists: list[list[SearchResult]] = []
+
+            # 1. Hybrid search (BM25 + Fashion CLIP vector)
+            fashion_clip_vec = vectors.get("fashion_clip")
+            if fashion_clip_vec is not None:
+                try:
+                    hybrid_kwargs = dict(
+                        query=query,
+                        vector=fashion_clip_vec.tolist(),
+                        target_vector="fashion_clip",
+                        alpha=0.5,
+                        query_properties=["product_name", "description", "category", "color"],
+                        fusion_type=HybridFusion.RELATIVE_SCORE,
+                        limit=fetch_limit,
+                        return_metadata=MetadataQuery(score=True),
+                    )
+                    if weaviate_filter:
+                        hybrid_kwargs["filters"] = weaviate_filter
+
+                    hybrid_results = collection.query.hybrid(**hybrid_kwargs)
+                    result_lists.append([
+                        self._obj_to_result(obj, obj.metadata.score or 0)
+                        for obj in hybrid_results.objects
+                    ])
+                    logger.info(f"Hybrid (BM25+fashion_clip): {len(hybrid_results.objects)} results")
+                except Exception as e:
+                    logger.warning(f"Hybrid search failed, falling back to near_vector: {e}")
+                    # Fallback to simple near_vector for fashion_clip
+                    nv_kwargs = dict(
+                        near_vector=fashion_clip_vec.tolist(),
+                        target_vector="fashion_clip",
+                        limit=fetch_limit,
+                        return_metadata=MetadataQuery(distance=True),
+                    )
+                    if weaviate_filter:
+                        nv_kwargs["filters"] = weaviate_filter
+                    fallback = collection.query.near_vector(**nv_kwargs)
+                    result_lists.append([
+                        self._obj_to_result(obj, 1 - (obj.metadata.distance or 0))
+                        for obj in fallback.objects
+                    ])
+
+            # 2. near_vector with Marqo CLIP
+            marqo_vec = vectors.get("marqo_clip")
+            if marqo_vec is not None:
+                try:
+                    nv_kwargs = dict(
+                        near_vector=marqo_vec.tolist(),
+                        target_vector="marqo_clip",
+                        limit=fetch_limit,
+                        return_metadata=MetadataQuery(distance=True),
+                    )
+                    if weaviate_filter:
+                        nv_kwargs["filters"] = weaviate_filter
+                    marqo_results = collection.query.near_vector(**nv_kwargs)
+                    result_lists.append([
+                        self._obj_to_result(obj, 1 - (obj.metadata.distance or 0))
+                        for obj in marqo_results.objects
+                    ])
+                    logger.info(f"near_vector marqo_clip: {len(marqo_results.objects)} results")
+                except Exception as e:
+                    logger.warning(f"Marqo CLIP search failed: {e}")
+
+            # 3. near_vector with SigLIP2
+            siglip_vec = vectors.get("siglip2")
+            if siglip_vec is not None:
+                try:
+                    nv_kwargs = dict(
+                        near_vector=siglip_vec.tolist(),
+                        target_vector="siglip2",
+                        limit=fetch_limit,
+                        return_metadata=MetadataQuery(distance=True),
+                    )
+                    if weaviate_filter:
+                        nv_kwargs["filters"] = weaviate_filter
+                    siglip_results = collection.query.near_vector(**nv_kwargs)
+                    result_lists.append([
+                        self._obj_to_result(obj, 1 - (obj.metadata.distance or 0))
+                        for obj in siglip_results.objects
+                    ])
+                    logger.info(f"near_vector siglip2: {len(siglip_results.objects)} results")
+                except Exception as e:
+                    logger.warning(f"SigLIP2 search failed: {e}")
+
+            if not result_lists:
+                logger.warning("No search results from any source")
+                return []
+
+            # 4. RRF fusion
+            fused = self._rrf_fusion(result_lists, limit)
+            logger.info(f"RRF fusion: {len(result_lists)} sources → {len(fused)} results")
+            return fused
+
+        except Exception as e:
+            logger.exception(f"Hybrid search error: {e}")
+            raise RuntimeError(f"Hybrid search failed: {e}")
+
+    def search_multi_vector(
+        self,
+        vectors: dict[str, np.ndarray],
+        limit: int = 20,
+        filters: SearchFilters | None = None,
+    ) -> list[SearchResult]:
+        """Multi-vector search without BM25 (for image search)."""
+        try:
+            if not self.collection_exists():
+                return []
+
+            collection = self.client.collections.get(self.collection_name)
+            weaviate_filter = self._build_filter(filters)
+            fetch_limit = limit * 3
+
+            result_lists: list[list[SearchResult]] = []
+
+            for vec_name, vec in vectors.items():
+                try:
+                    nv_kwargs = dict(
+                        near_vector=vec.tolist(),
+                        target_vector=vec_name,
+                        limit=fetch_limit,
+                        return_metadata=MetadataQuery(distance=True),
+                    )
+                    if weaviate_filter:
+                        nv_kwargs["filters"] = weaviate_filter
+                    results = collection.query.near_vector(**nv_kwargs)
+                    result_lists.append([
+                        self._obj_to_result(obj, 1 - (obj.metadata.distance or 0))
+                        for obj in results.objects
+                    ])
+                    logger.info(f"near_vector {vec_name}: {len(results.objects)} results")
+                except Exception as e:
+                    logger.warning(f"{vec_name} search failed: {e}")
+
+            if not result_lists:
+                return []
+
+            return self._rrf_fusion(result_lists, limit)
+
+        except Exception as e:
+            logger.exception(f"Multi-vector search error: {e}")
+            raise RuntimeError(f"Multi-vector search failed: {e}")
 
     def get_stats(self) -> dict[str, Any]:
         """Get collection statistics."""

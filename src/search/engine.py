@@ -1,14 +1,18 @@
-"""Search engine combining model and database operations for fashion."""
+"""Search engine combining models and database operations for fashion."""
 
+import logging
 from dataclasses import dataclass, field
 from typing import Union
 
+import numpy as np
 from PIL import Image
 
 from src.database.weaviate_client import SearchFilters, SearchResult, WeaviateClient
 from src.models.base import BaseModel
 
 from .query_parser import ParsedQuery, QueryParser
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -23,17 +27,40 @@ class SearchResponse:
 
 
 class SearchEngine:
-    """Search engine for fashion image retrieval with semantic query understanding."""
+    """Search engine for fashion image retrieval with multi-model hybrid search."""
 
-    def __init__(self, model: BaseModel, db_client: WeaviateClient):
-        self.model = model
+    def __init__(self, models: dict[str, BaseModel], db_client: WeaviateClient):
+        self.models = models
+        self.model = models.get("fashion_clip")  # backward compat
         self.db_client = db_client
         self.query_parser = QueryParser()
 
+    def _encode_text_all(self, text: str) -> dict[str, np.ndarray]:
+        """Encode text with all available models."""
+        vectors = {}
+        for name, model in self.models.items():
+            try:
+                vectors[name] = model.encode_text(text)
+            except Exception as e:
+                logger.warning(f"Failed to encode text with {name}: {e}")
+        return vectors
+
+    def _encode_image_all(self, image: Union[Image.Image, str]) -> dict[str, np.ndarray]:
+        """Encode image with all available models."""
+        vectors = {}
+        for name, model in self.models.items():
+            try:
+                vectors[name] = model.encode_image(image)
+            except Exception as e:
+                logger.warning(f"Failed to encode image with {name}: {e}")
+        return vectors
+
     def search_by_text(self, query: str, limit: int = 10) -> SearchResponse:
-        """Basic text search without smart parsing."""
-        text_vector = self.model.encode_text(query)
-        results = self.db_client.search_by_text(text_vector, limit)
+        """Basic text search with hybrid multi-model."""
+        vectors = self._encode_text_all(query)
+        results = self.db_client.search_hybrid(
+            query=query, vectors=vectors, limit=limit,
+        )
 
         return SearchResponse(
             results=results,
@@ -48,10 +75,11 @@ class SearchEngine:
         gender: str | None = None,
         context: str | None = None,
     ) -> SearchResponse:
-        """Smart search with semantic query understanding.
+        """Smart search with semantic query understanding + hybrid multi-model.
 
-        Combines gender + context + description for Fashion CLIP search.
+        Combines gender + context + description for CLIP search.
         Also extracts metadata filters (price, color, category).
+        Uses BM25 + 3 vector models with RRF fusion.
         """
         # Parse the query with chatbot context
         parsed = self.query_parser.parse_with_context(query, gender=gender, context=context)
@@ -80,11 +108,11 @@ class SearchEngine:
         visual_query = parsed.get_visual_query()
         visual_parts.append(visual_query)
 
-        # Combine into final CLIP query
+        # Combine into final query
         combined_query = " ".join(part for part in visual_parts if part)
 
-        # Encode to vector
-        text_vector = self.model.encode_text(combined_query)
+        # Encode with all 3 models
+        vectors = self._encode_text_all(combined_query)
 
         # Build filters from parsed query
         filters = None
@@ -113,8 +141,13 @@ class SearchEngine:
             if parsed.gender:
                 applied_filters["gender"] = parsed.gender
 
-        # Search with filters
-        results = self.db_client.search_by_text(text_vector, limit, filters)
+        # Hybrid search: BM25 on combined_query + 3 vectors + RRF
+        results = self.db_client.search_hybrid(
+            query=combined_query,
+            vectors=vectors,
+            limit=limit,
+            filters=filters,
+        )
 
         return SearchResponse(
             results=results,
@@ -130,9 +163,11 @@ class SearchEngine:
         limit: int = 10,
         filters: SearchFilters | None = None,
     ) -> SearchResponse:
-        """Search for similar fashion items using an image."""
-        image_vector = self.model.encode_image(image)
-        results = self.db_client.search_by_image(image_vector, limit, filters)
+        """Search for similar fashion items using an image (multi-vector, no BM25)."""
+        vectors = self._encode_image_all(image)
+        results = self.db_client.search_multi_vector(
+            vectors=vectors, limit=limit, filters=filters,
+        )
 
         return SearchResponse(
             results=results,
@@ -144,8 +179,12 @@ class SearchEngine:
         """Get search engine statistics."""
         db_stats = self.db_client.get_stats()
 
+        model_names = {name: m.model_name for name, m in self.models.items()}
+        primary = self.model
+
         return {
             **db_stats,
-            "model_name": self.model.model_name,
-            "vector_dimension": self.model.get_dimension(),
+            "model_name": primary.model_name if primary else "multi-model",
+            "vector_dimension": primary.get_dimension() if primary else 0,
+            "models": model_names,
         }

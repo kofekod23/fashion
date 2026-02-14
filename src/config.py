@@ -83,10 +83,12 @@ class Config:
 
     def get_model_class(self):
         """Get the appropriate model class based on configuration."""
-        from src.models import CLIPModel
+        from src.models import CLIPModel, OpenCLIPModel, SigLIPModel
 
         model_classes = {
             "clip": CLIPModel,
+            "openclip": OpenCLIPModel,
+            "siglip": SigLIPModel,
         }
         return model_classes.get(self.model_type, CLIPModel)
 

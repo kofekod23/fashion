@@ -11,6 +11,9 @@ from fastapi.templating import Jinja2Templates
 from src.config import config
 from src.database.weaviate_client import WeaviateClient
 from src.models.base import BaseModel
+from src.models.clip_model import CLIPModel
+from src.models.openclip_model import OpenCLIPModel
+from src.models.siglip_model import SigLIPModel
 from src.search.engine import SearchEngine
 
 logger = logging.getLogger(__name__)
@@ -22,19 +25,35 @@ logging.basicConfig(
 
 # Global instances with reentrant lock for safety
 _model: BaseModel | None = None
+_models: dict[str, BaseModel] | None = None
 _db_client: WeaviateClient | None = None
 _search_engine: SearchEngine | None = None
 _init_lock = threading.RLock()
 
+# Model configurations: vector_name -> (class, model_name)
+MODEL_CONFIGS = {
+    "fashion_clip": (CLIPModel, "patrickjohncyh/fashion-clip"),
+    "marqo_clip": (OpenCLIPModel, "Marqo/marqo-fashionCLIP"),
+    "siglip2": (SigLIPModel, "google/siglip2-so400m-patch14-384"),
+}
+
 
 def get_model() -> BaseModel:
-    """Get the global model instance."""
-    global _model
+    """Get the Fashion CLIP model (backward compatibility)."""
+    return get_models()["fashion_clip"]
+
+
+def get_models() -> dict[str, BaseModel]:
+    """Get all 3 model instances."""
+    global _models
     with _init_lock:
-        if _model is None:
-            model_class = config.get_model_class()
-            _model = model_class(config.model_name)
-    return _model
+        if _models is None:
+            _models = {}
+            for name, (cls, model_name) in MODEL_CONFIGS.items():
+                logger.info(f"Loading model {name}: {model_name}")
+                _models[name] = cls(model_name)
+                logger.info(f"Model {name} loaded ({_models[name].get_dimension()}d)")
+    return _models
 
 
 def get_db_client() -> WeaviateClient:
@@ -52,7 +71,7 @@ def get_search_engine() -> SearchEngine:
     global _search_engine
     with _init_lock:
         if _search_engine is None:
-            _search_engine = SearchEngine(get_model(), get_db_client())
+            _search_engine = SearchEngine(get_models(), get_db_client())
     return _search_engine
 
 
@@ -60,9 +79,9 @@ def get_search_engine() -> SearchEngine:
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     try:
-        logger.info("Loading model...")
-        get_model()
-        logger.info(f"Model loaded: {config.model_name}")
+        logger.info("Loading models...")
+        models = get_models()
+        logger.info(f"All {len(models)} models loaded: {list(models.keys())}")
 
         logger.info(f"Connecting to Weaviate at {config.weaviate_url}...")
         db_client = get_db_client()
@@ -95,8 +114,8 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
         title="Fashion Search Engine",
-        description="Search fashion items using natural language with Fashion CLIP and Weaviate",
-        version="0.1.0",
+        description="Search fashion items using natural language with multi-model hybrid search",
+        version="0.2.0",
         lifespan=lifespan,
     )
 
