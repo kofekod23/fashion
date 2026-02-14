@@ -39,6 +39,7 @@ class ImageDocument:
     description: str | None = None
     image_index: int | None = None
     gender: str | None = None
+    occasion: str | None = None
 
 
 @dataclass
@@ -63,6 +64,7 @@ class SearchResult:
     description: str | None = None
     image_index: int | None = None
     gender: str | None = None
+    occasion: str | None = None
 
 
 @dataclass
@@ -184,6 +186,7 @@ class WeaviateClient:
                 Property(name="description", data_type=DataType.TEXT),
                 Property(name="image_index", data_type=DataType.INT),
                 Property(name="gender", data_type=DataType.TEXT),
+                Property(name="occasion", data_type=DataType.TEXT),
             ],
             vectorizer_config=named_vectors,
         )
@@ -363,6 +366,7 @@ class WeaviateClient:
                         description=obj.properties.get("description"),
                         image_index=obj.properties.get("image_index"),
                         gender=obj.properties.get("gender"),
+                        occasion=obj.properties.get("occasion"),
                     )
                 )
 
@@ -411,6 +415,7 @@ class WeaviateClient:
             description=obj.properties.get("description"),
             image_index=obj.properties.get("image_index"),
             gender=obj.properties.get("gender"),
+            occasion=obj.properties.get("occasion"),
         )
 
     @staticmethod
@@ -469,7 +474,7 @@ class WeaviateClient:
             try:
                 bm25_kwargs = dict(
                     query=query,
-                    query_properties=["color", "category", "gender", "description"],
+                    query_properties=["color", "category", "description", "occasion"],
                     limit=fetch_limit,
                     return_metadata=MetadataQuery(score=True),
                 )
