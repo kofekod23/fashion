@@ -469,7 +469,7 @@ class WeaviateClient:
             try:
                 bm25_kwargs = dict(
                     query=query,
-                    query_properties=["product_name", "category"],
+                    query_properties=["color", "category", "gender", "description"],
                     limit=fetch_limit,
                     return_metadata=MetadataQuery(score=True),
                 )
