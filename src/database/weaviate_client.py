@@ -457,7 +457,7 @@ class WeaviateClient:
         1-2. Pure BM25 on product_name, category, color, description, occasion
         3. near_vector Fashion CLIP (512d)
         4. near_vector Marqo CLIP (512d)
-        5. near_vector SigLIP2 (1152d)
+        5. near_vector FashionSigLIP (768d)
         """
         try:
             if not self.collection_exists():

@@ -34,7 +34,7 @@ _init_lock = threading.RLock()
 MODEL_CONFIGS = {
     "fashion_clip": (CLIPModel, "patrickjohncyh/fashion-clip"),
     "marqo_clip": (OpenCLIPModel, "Marqo/marqo-fashionCLIP"),
-    "siglip2": (SigLIPModel, "google/siglip2-so400m-patch14-384"),
+    "siglip2": (SigLIPModel, "Marqo/marqo-fashionSigLIP"),
 }
 
 

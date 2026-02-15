@@ -1,4 +1,4 @@
-"""SigLIP2 model implementation."""
+"""Marqo FashionSigLIP model implementation (OpenCLIP format)."""
 
 import logging
 from typing import Union
@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 class SigLIPModel(BaseModel):
-    """SigLIP2-SO400M model wrapper using HuggingFace transformers."""
+    """Marqo FashionSigLIP model wrapper using OpenCLIP."""
 
     MAX_TEXT_TOKENS = 64
 
-    def __init__(self, model_name: str = "google/siglip2-so400m-patch14-384", device: str | None = None):
+    def __init__(self, model_name: str = "Marqo/marqo-fashionSigLIP", device: str | None = None):
         self._model_name = model_name
         self._device = device or config.device
 
@@ -26,40 +26,29 @@ class SigLIPModel(BaseModel):
             logger.warning("CUDA requested but not available, falling back to CPU")
             self._device = "cpu"
 
-        logger.info(f"Loading SigLIP2 model {model_name} on {self._device}")
+        logger.info(f"Loading FashionSigLIP model {model_name} on {self._device}")
 
-        from transformers import AutoModel, AutoProcessor
+        import open_clip
 
-        self._model = AutoModel.from_pretrained(model_name)
-        self._processor = AutoProcessor.from_pretrained(model_name)
-
-        self._model.to(self._device)
+        self._model, _, self._preprocess = open_clip.create_model_and_transforms(
+            f"hf-hub:{model_name}", device=self._device
+        )
+        self._tokenizer = open_clip.get_tokenizer(f"hf-hub:{model_name}")
         self._model.eval()
 
-        # SigLIP2-SO400M is 1152d
-        self._dimension = 1152
+        # Marqo FashionSigLIP is 768d
+        self._dimension = 768
 
     def _load_image(self, image: Union[Image.Image, str]) -> Image.Image:
         if isinstance(image, str):
             return Image.open(image).convert("RGB")
         return image.convert("RGB")
 
-    def _to_tensor(self, feat):
-        if isinstance(feat, torch.Tensor):
-            return feat
-        if hasattr(feat, "pooler_output") and feat.pooler_output is not None:
-            return feat.pooler_output
-        if hasattr(feat, "last_hidden_state"):
-            return feat.last_hidden_state[:, 0, :]
-        raise ValueError(f"Cannot extract tensor from {type(feat)}")
-
     def encode_image(self, image: Union[Image.Image, str]) -> np.ndarray:
         img = self._load_image(image)
         with torch.no_grad():
-            inputs = self._processor(images=img, return_tensors="pt")
-            inputs = {k: v.to(self._device) for k, v in inputs.items()}
-            features = self._model.get_image_features(**inputs)
-            features = self._to_tensor(features)
+            image_tensor = self._preprocess(img).unsqueeze(0).to(self._device)
+            features = self._model.encode_image(image_tensor)
             features = features / features.norm(p=2, dim=-1, keepdim=True)
         return features.cpu().float().numpy().flatten()
 
@@ -67,24 +56,16 @@ class SigLIPModel(BaseModel):
         if not text or not text.strip():
             raise ValueError("Text query cannot be empty")
         with torch.no_grad():
-            tok = getattr(self._processor, "tokenizer", self._processor)
-            inputs = tok(
-                [text], return_tensors="pt", padding=True,
-                truncation=True, max_length=self.MAX_TEXT_TOKENS,
-            )
-            inputs = {k: v.to(self._device) for k, v in inputs.items()}
-            features = self._model.get_text_features(**inputs)
-            features = self._to_tensor(features)
+            tokens = self._tokenizer([text]).to(self._device)
+            features = self._model.encode_text(tokens)
             features = features / features.norm(p=2, dim=-1, keepdim=True)
         return features.cpu().float().numpy().flatten()
 
     def encode_images_batch(self, images: list[Union[Image.Image, str]]) -> np.ndarray:
         imgs = [self._load_image(img) for img in images]
         with torch.no_grad():
-            inputs = self._processor(images=imgs, return_tensors="pt")
-            inputs = {k: v.to(self._device) for k, v in inputs.items()}
-            features = self._model.get_image_features(**inputs)
-            features = self._to_tensor(features)
+            tensors = torch.stack([self._preprocess(img) for img in imgs]).to(self._device)
+            features = self._model.encode_image(tensors)
             features = features / features.norm(p=2, dim=-1, keepdim=True)
         return features.cpu().float().numpy()
 
