@@ -1,4 +1,4 @@
-"""Marqo FashionSigLIP model implementation (OpenCLIP format)."""
+"""Marqo FashionSigLIP model implementation (HuggingFace custom format)."""
 
 import logging
 from typing import Union
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class SigLIPModel(BaseModel):
-    """Marqo FashionSigLIP model wrapper using OpenCLIP."""
+    """Marqo FashionSigLIP model wrapper using HuggingFace transformers."""
 
     MAX_TEXT_TOKENS = 64
 
@@ -28,12 +28,12 @@ class SigLIPModel(BaseModel):
 
         logger.info(f"Loading FashionSigLIP model {model_name} on {self._device}")
 
-        import open_clip
+        from transformers import AutoModel, AutoProcessor
 
-        self._model, _, self._preprocess = open_clip.create_model_and_transforms(
-            f"hf-hub:{model_name}", device=self._device
-        )
-        self._tokenizer = open_clip.get_tokenizer(f"hf-hub:{model_name}")
+        self._model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
+        self._processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+
+        self._model.to(self._device)
         self._model.eval()
 
         # Marqo FashionSigLIP is 768d
@@ -44,11 +44,22 @@ class SigLIPModel(BaseModel):
             return Image.open(image).convert("RGB")
         return image.convert("RGB")
 
+    def _to_tensor(self, feat):
+        if isinstance(feat, torch.Tensor):
+            return feat
+        if hasattr(feat, "pooler_output") and feat.pooler_output is not None:
+            return feat.pooler_output
+        if hasattr(feat, "last_hidden_state"):
+            return feat.last_hidden_state[:, 0, :]
+        raise ValueError(f"Cannot extract tensor from {type(feat)}")
+
     def encode_image(self, image: Union[Image.Image, str]) -> np.ndarray:
         img = self._load_image(image)
         with torch.no_grad():
-            image_tensor = self._preprocess(img).unsqueeze(0).to(self._device)
-            features = self._model.encode_image(image_tensor)
+            inputs = self._processor(images=img, return_tensors="pt")
+            inputs = {k: v.to(self._device) for k, v in inputs.items()}
+            features = self._model.get_image_features(**inputs)
+            features = self._to_tensor(features)
             features = features / features.norm(p=2, dim=-1, keepdim=True)
         return features.cpu().float().numpy().flatten()
 
@@ -56,16 +67,24 @@ class SigLIPModel(BaseModel):
         if not text or not text.strip():
             raise ValueError("Text query cannot be empty")
         with torch.no_grad():
-            tokens = self._tokenizer([text]).to(self._device)
-            features = self._model.encode_text(tokens)
+            tok = getattr(self._processor, "tokenizer", self._processor)
+            inputs = tok(
+                [text], return_tensors="pt", padding=True,
+                truncation=True, max_length=self.MAX_TEXT_TOKENS,
+            )
+            inputs = {k: v.to(self._device) for k, v in inputs.items()}
+            features = self._model.get_text_features(**inputs)
+            features = self._to_tensor(features)
             features = features / features.norm(p=2, dim=-1, keepdim=True)
         return features.cpu().float().numpy().flatten()
 
     def encode_images_batch(self, images: list[Union[Image.Image, str]]) -> np.ndarray:
         imgs = [self._load_image(img) for img in images]
         with torch.no_grad():
-            tensors = torch.stack([self._preprocess(img) for img in imgs]).to(self._device)
-            features = self._model.encode_image(tensors)
+            inputs = self._processor(images=imgs, return_tensors="pt")
+            inputs = {k: v.to(self._device) for k, v in inputs.items()}
+            features = self._model.get_image_features(**inputs)
+            features = self._to_tensor(features)
             features = features / features.norm(p=2, dim=-1, keepdim=True)
         return features.cpu().float().numpy()
 
