@@ -92,8 +92,14 @@ class QueryParser:
 
     # Gender keywords
     GENDER_KEYWORDS = {
-        "men": ["men", "man", "male", "homme", "mens", "men's", "masculine", "guy"],
-        "women": ["women", "woman", "female", "femme", "womens", "women's", "feminine", "lady", "ladies"],
+        "men": [
+            "men", "man", "male", "homme", "mens", "men's", "masculine", "guy",
+            "masculin", "garçon", "garcon", "monsieur",
+        ],
+        "women": [
+            "women", "woman", "female", "femme", "womens", "women's", "feminine", "lady", "ladies",
+            "féminin", "feminin", "fille", "madame",
+        ],
     }
 
     # Price patterns (£ currency)

@@ -87,10 +87,13 @@ class SearchEngine:
         # Build the visual query for CLIP
         visual_parts = []
 
-        # Add gender context
-        if gender and gender.lower() not in ("mixte", "unisex"):
-            gender_map = {"homme": "men's", "femme": "women's", "men": "men's", "women": "women's"}
-            visual_parts.append(gender_map.get(gender.lower(), ""))
+        # Add gender context (chatbot gender or parsed from query text)
+        effective_gender = parsed.gender  # already mapped to "men"/"women" by parser
+        if effective_gender:
+            gender_clip = {"men": "men's", "women": "women's"}
+            clip_prefix = gender_clip.get(effective_gender, "")
+            if clip_prefix:
+                visual_parts.append(clip_prefix)
 
         # Add context
         if context:
