@@ -60,8 +60,8 @@ class SearchEngine:
 
         if SearchEngine._gender_label_vecs is None:
             vecs = np.stack([
-                fc.encode_text("a photo of men's clothing"),
-                fc.encode_text("a photo of women's clothing"),
+                fc.encode_text("a photo of a male model"),
+                fc.encode_text("a photo of a female model"),
             ])
             SearchEngine._gender_label_vecs = vecs
             logger.info("Gender label embeddings cached (2 labels)")
