@@ -368,6 +368,12 @@ async def search_by_image(
         engine = get_search_engine()
         response = await run_in_executor(engine.search_by_image, pil_image, limit)
 
+        applied_filters = None
+        if response.applied_filters:
+            applied_filters = AppliedFiltersResponse(
+                gender=response.applied_filters.get("gender"),
+            )
+
         return SearchResponse(
             results=[
                 SearchResultResponse(
@@ -392,6 +398,7 @@ async def search_by_image(
             ],
             query_type=response.query_type,
             total_results=response.total_results,
+            applied_filters=applied_filters,
         )
 
     except HTTPException:

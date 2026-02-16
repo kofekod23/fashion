@@ -29,6 +29,9 @@ class SearchResponse:
 class SearchEngine:
     """Search engine for fashion image retrieval with multi-model hybrid search."""
 
+    # Lazy cache for gender zero-shot label vectors
+    _gender_label_vecs: np.ndarray | None = None
+
     def __init__(self, models: dict[str, BaseModel], db_client: WeaviateClient):
         self.models = models
         self.model = models.get("fashion_clip")  # backward compat
@@ -44,6 +47,30 @@ class SearchEngine:
             except Exception as e:
                 logger.warning(f"Failed to encode text with {name}: {e}")
         return vectors
+
+    def _detect_gender_from_vec(self, image_vec: np.ndarray) -> str | None:
+        """Detect clothing gender from a Fashion CLIP image vector (zero-shot).
+
+        Uses cosine similarity against pre-computed "men's clothing" / "women's clothing"
+        label embeddings. Returns "men" or "women".
+        """
+        fc = self.models.get("fashion_clip")
+        if fc is None:
+            return None
+
+        if SearchEngine._gender_label_vecs is None:
+            vecs = np.stack([
+                fc.encode_text("a photo of men's clothing"),
+                fc.encode_text("a photo of women's clothing"),
+            ])
+            SearchEngine._gender_label_vecs = vecs
+            logger.info("Gender label embeddings cached (2 labels)")
+
+        sims = image_vec @ SearchEngine._gender_label_vecs.T
+        best_idx = int(np.argmax(sims))
+        labels = ["men", "women"]
+        logger.info(f"Gender detection: men={sims[0]:.3f} women={sims[1]:.3f} → {labels[best_idx]}")
+        return labels[best_idx]
 
     def _encode_image_all(self, image: Union[Image.Image, str]) -> dict[str, np.ndarray]:
         """Encode image with all available models."""
@@ -166,16 +193,35 @@ class SearchEngine:
         limit: int = 10,
         filters: SearchFilters | None = None,
     ) -> SearchResponse:
-        """Search for similar fashion items using an image (multi-vector, no BM25)."""
+        """Search for similar fashion items using an image (multi-vector, no BM25).
+
+        Auto-detects gender from the uploaded image when no gender filter is provided.
+        """
         vectors = self._encode_image_all(image)
+
+        # Auto-detect gender from image if not specified
+        detected_gender = None
+        if (filters is None or not filters.gender) and "fashion_clip" in vectors:
+            detected_gender = self._detect_gender_from_vec(vectors["fashion_clip"])
+            if detected_gender:
+                if filters is None:
+                    filters = SearchFilters(gender=detected_gender)
+                else:
+                    filters.gender = detected_gender
+
         results = self.db_client.search_multi_vector(
             vectors=vectors, limit=limit, filters=filters,
         )
+
+        applied_filters = {}
+        if detected_gender:
+            applied_filters["gender"] = detected_gender
 
         return SearchResponse(
             results=results,
             query_type="image",
             total_results=len(results),
+            applied_filters=applied_filters,
         )
 
     def get_stats(self) -> dict:
