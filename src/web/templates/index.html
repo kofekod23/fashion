@@ -394,6 +394,16 @@
             color: var(--accent);
         }
 
+        .product-card-gender {
+            font-size: 0.7rem;
+            color: #fff;
+            background: var(--text-light);
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 10px;
+            margin-bottom: 4px;
+        }
+
         .product-card-score {
             font-size: 0.72rem;
             color: var(--text-light);
@@ -1081,6 +1091,7 @@ function displayResults(data) {
 
         const priceHtml = r.price ? `<div class="product-card-price">\u00a3${r.price.toFixed(2)}</div>` : '';
         const brandHtml = r.brand ? `<div class="product-card-brand">${escapeHtml(r.brand)}</div>` : '';
+        const genderHtml = r.gender ? `<div class="product-card-gender">${escapeHtml(r.gender)}</div>` : '';
         const nameHtml = r.product_name ? escapeHtml(r.product_name) : (r.filename || 'Produit');
 
         card.innerHTML = `
@@ -1088,6 +1099,7 @@ function displayResults(data) {
             <div class="product-card-info">
                 <div class="product-card-name">${nameHtml}</div>
                 ${brandHtml}
+                ${genderHtml}
                 ${priceHtml}
                 <div class="product-card-score">${(r.score * 100).toFixed(0)}% match</div>
             </div>
