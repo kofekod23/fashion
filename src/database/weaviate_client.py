@@ -148,7 +148,7 @@ class WeaviateClient:
             self.connect()
         return self._client
 
-    VECTOR_NAMES = ["fashion_clip", "marqo_clip", "siglip2"]
+    VECTOR_NAMES = ["fashion_clip", "marqo_clip"]
 
     def create_schema(self, vector_dimension: int = 0) -> None:
         """Create the fashion collection schema with named vectors."""
@@ -451,13 +451,12 @@ class WeaviateClient:
         limit: int = 20,
         filters: SearchFilters | None = None,
     ) -> list[SearchResult]:
-        """Hybrid search: BM25 (2x weight) + 3 vector models with RRF fusion.
+        """Hybrid search: BM25 (2x weight) + 2 vector models with RRF fusion.
 
-        5 sources in RRF (BM25 counted twice for more keyword influence):
+        4 sources in RRF (BM25 counted twice for more keyword influence):
         1-2. Pure BM25 on product_name, category, color, description, occasion
         3. near_vector Fashion CLIP (512d)
         4. near_vector Marqo CLIP (512d)
-        5. near_vector FashionSigLIP (768d)
         """
         try:
             if not self.collection_exists():
@@ -495,7 +494,7 @@ class WeaviateClient:
                 # Add BM25 twice in RRF to give keywords more weight (2/5 vs 3/5)
                 result_lists.append(bm25_list)
                 result_lists.append(bm25_list)
-                logger.info(f"BM25: {len(bm25_results.objects)} results (2x weight in RRF)")
+                logger.info(f"BM25: {len(bm25_results.objects)} results (2x weight in RRF, 2/4)")
             except Exception as e:
                 logger.warning(f"BM25 search failed: {e}")
 
@@ -523,7 +522,7 @@ class WeaviateClient:
                 logger.warning("No search results from any source")
                 return []
 
-            # RRF fusion of all 5 sources (BM25 x2 + 3 vectors)
+            # RRF fusion of all 4 sources (BM25 x2 + 2 vectors)
             fused = self._rrf_fusion(result_lists, limit)
             logger.info(f"RRF fusion: {len(result_lists)} sources → {len(fused)} results")
             return fused

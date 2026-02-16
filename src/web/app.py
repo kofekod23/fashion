@@ -13,7 +13,6 @@ from src.database.weaviate_client import WeaviateClient
 from src.models.base import BaseModel
 from src.models.clip_model import CLIPModel
 from src.models.openclip_model import OpenCLIPModel
-from src.models.siglip_model import SigLIPModel
 from src.search.engine import SearchEngine
 
 logger = logging.getLogger(__name__)
@@ -34,7 +33,6 @@ _init_lock = threading.RLock()
 MODEL_CONFIGS = {
     "fashion_clip": (CLIPModel, "patrickjohncyh/fashion-clip"),
     "marqo_clip": (OpenCLIPModel, "Marqo/marqo-fashionCLIP"),
-    "siglip2": (SigLIPModel, "Marqo/marqo-fashionSigLIP"),
 }
 
 
@@ -44,7 +42,7 @@ def get_model() -> BaseModel:
 
 
 def get_models() -> dict[str, BaseModel]:
-    """Get all 3 model instances."""
+    """Get all model instances."""
     global _models
     with _init_lock:
         if _models is None:

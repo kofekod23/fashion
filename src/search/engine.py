@@ -79,7 +79,7 @@ class SearchEngine:
 
         Combines gender + context + description for CLIP search.
         Also extracts metadata filters (price, color, category).
-        Uses BM25 + 3 vector models with RRF fusion.
+        Uses BM25 + 2 vector models with RRF fusion.
         """
         # Parse the query with chatbot context
         parsed = self.query_parser.parse_with_context(query, gender=gender, context=context)
@@ -111,7 +111,7 @@ class SearchEngine:
         # Combine into final query
         combined_query = " ".join(part for part in visual_parts if part)
 
-        # Encode with all 3 models
+        # Encode with all models
         vectors = self._encode_text_all(combined_query)
 
         # Build filters from parsed query
@@ -141,7 +141,7 @@ class SearchEngine:
             if parsed.gender:
                 applied_filters["gender"] = parsed.gender
 
-        # Hybrid search: BM25 on combined_query + 3 vectors + RRF
+        # Hybrid search: BM25 on combined_query + 2 vectors + RRF
         results = self.db_client.search_hybrid(
             query=combined_query,
             vectors=vectors,

@@ -63,18 +63,21 @@ class QueryParser:
     CATEGORIES = {
         "dresses": ["dress", "dresses", "gown", "maxi", "midi"],
         "tops": ["top", "tops", "blouse", "shirt", "t-shirt", "tee", "camisole", "crop top", "vest"],
-        "trousers": ["trousers", "pants", "jeans", "chinos", "leggings", "joggers"],
+        "pants": ["trousers", "pants", "jeans", "chinos", "leggings", "joggers"],
+        "denim": ["denim"],
         "shoes": ["shoes", "boots", "trainers", "sneakers", "heels", "sandals", "loafers", "flats", "pumps"],
         "jackets": ["jacket", "jackets", "coat", "coats", "blazer", "parka", "bomber", "puffer", "windbreaker"],
         "bags": ["bag", "bags", "handbag", "backpack", "clutch", "tote", "crossbody", "purse"],
-        "knitwear": ["knitwear", "jumper", "sweater", "cardigan", "pullover", "hoodie"],
+        "sweaters": ["knitwear", "jumper", "sweater", "cardigan", "pullover", "hoodie"],
         "shorts": ["shorts"],
-        "suits": ["suit", "suits", "tuxedo"],
+        "suiting": ["suit", "suits", "tuxedo"],
         "skirts": ["skirt", "skirts"],
         "swimwear": ["swimwear", "bikini", "swimsuit", "swimming"],
         "accessories": ["scarf", "hat", "belt", "gloves", "sunglasses", "watch", "jewellery", "jewelry", "necklace", "bracelet", "earrings"],
-        "underwear": ["underwear", "lingerie", "bra", "briefs", "boxers", "socks"],
+        "intimates": ["underwear", "lingerie", "bra", "briefs", "boxers", "socks"],
         "activewear": ["activewear", "sportswear", "gym", "running", "yoga", "leotard"],
+        "rompers": ["romper", "rompers", "playsuit"],
+        "jumpsuits": ["jumpsuit", "jumpsuits"],
     }
 
     # Context -> visual style keywords
